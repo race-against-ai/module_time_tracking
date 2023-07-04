@@ -38,20 +38,20 @@ class Timer:
     def __init__(self, config_file_path='time_tracking.json', p_fallback: bool = False, test: bool = False):
         # initialise variables
         self.__test = test
-        self.coordinates_list = []
+        self.coordinates_list: list = []
         self.__start_time: float = 0
         self.__last_lap_time: float = 0
         self.__last_checkpoint_time: float = 0
-        self.__checkpoints = []
-        self.__payload: dict[str] = {}
+        self.__checkpoints: list = []
+        self.__payload: dict = {}
         self.__checkpoint_drawn = False
         self.__fallback = p_fallback
         self.__video_path = "C:/Users/VWF6GWD/Desktop/Race against ai worskspace/TestVideo/drive_990p.h265"
 
         # getting best times from database interface
         self.__best_times = self.request_best_times()
-        self.__pers_best_times = {"sector_1_best_time": 1000, "sector_2_best_time": 1000, "sector_3_best_time": 1000,
-                                  "lap_best_time": 1000}
+        self.__pers_best_times = {"sector_1_best_time": 1000.0, "sector_2_best_time": 1000.0, "sector_3_best_time": 1000.0,
+                                  "lap_best_time": 1000.0}
 
         # getting checkpoint positions from config file
         if find_config_file(config_file_path) is False:
@@ -380,9 +380,9 @@ class CheckpointDefiner:
         `None`
         """
         self.__close = False
-        self.__roi_points: list[list[tuple[int, int], tuple[int, int]]] = []
+        self.__roi_points: list = []
         self.__click = 0
-        self.__checkpoints: dict[str:list[dict]] = {"checkpoints": []}
+        self.__checkpoints: dict = {"checkpoints": []}
         self.__use_camera_stream: bool = p_use_camera_stream
 
         self.__define_cap(video_path)
