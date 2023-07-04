@@ -39,9 +39,9 @@ class Timer:
         # initialise variables
         self.__test = test
         self.coordinates_list = []
-        self.__start_time = 0
-        self.__last_lap_time = 0
-        self.__last_checkpoint_time = 0
+        self.__start_time: float = 0
+        self.__last_lap_time: float = 0
+        self.__last_checkpoint_time: float = 0
         self.__checkpoints = []
         self.__payload: dict[str] = {}
         self.__checkpoint_drawn = False
