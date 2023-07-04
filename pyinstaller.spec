@@ -27,7 +27,7 @@ exe = EXE(
     a.zipfiles,
     a.datas,
     [],
-    name='module_template',
+    name='time_tracking',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

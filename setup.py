@@ -9,15 +9,15 @@ def read(fname):
 
 
 setup(
-    name="raai_module_template",
+    name="time_tracking",
     version=versioneer.get_version(),
     cmdclass=versioneer.get_cmdclass(),
     author="NGITl",
-    author_email="your@email.de",
+    author_email="j.kurpeik@gmail.com",
     description=("RAAI Module Template for managing different projects for RAAI"),
     license="GPL 3.0",
-    keywords="template",
-    url="https://github.com/vw-wob-it-edu-ngitl/raai_module_template",
+    keywords="time tracking",
+    url="https://github.com/vw-wob-it-edu-ngitl/raai_module_time_tracking",
     packages=find_packages(),
     long_description=read("README.md"),
     install_requires=["pynng~=0.7.2"],
