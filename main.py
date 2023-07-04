@@ -1,5 +1,9 @@
 # Copyright (C) 2022 NG:ITL
-# import the main file in the backend folder
+from time_tracking.time_tracking import Timer
 
-if __name__ == "__main__":
-    print("enter you projects main function :)")
+if __name__ == '__main__':
+    print("Time-tracking started")
+    timer = Timer()
+    timer.start_timer()
+    while True:
+        timer.run()

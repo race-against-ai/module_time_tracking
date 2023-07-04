@@ -39,19 +39,19 @@ class Timer:
         # initialise variables
         self.__test = test
         self.coordinates_list: list = []
-        self.__start_time: float = 0
-        self.__last_lap_time: float = 0
-        self.__last_checkpoint_time: float = 0
+        self.__start_time: float = 0.0
+        self.__last_lap_time: float = 0.0
+        self.__last_checkpoint_time: float = 0.0
         self.__checkpoints: list = []
         self.__payload: dict = {}
         self.__checkpoint_drawn = False
         self.__fallback = p_fallback
-        self.__video_path = "C:/Users/VWF6GWD/Desktop/Race against ai worskspace/TestVideo/drive_990p.h265"
+        self.__video_path = "C:/Users/VWF6GWD/Desktop/Race against ai workspace/TestVideo/drive_990p.h265"
 
         # getting best times from database interface
         self.__best_times = self.request_best_times()
-        self.__pers_best_times = {"sector_1_best_time": 1000.0, "sector_2_best_time": 1000.0, "sector_3_best_time": 1000.0,
-                                  "lap_best_time": 1000.0}
+        self.__pers_best_times = {"sector_1_best_time": 1000.0, "sector_2_best_time": 1000.0,
+                                  "sector_3_best_time": 1000.0, "lap_best_time": 1000.0}
 
         # getting checkpoint positions from config file
         if find_config_file(config_file_path) is False:
@@ -392,8 +392,8 @@ class CheckpointDefiner:
         """
         Defines the video cap.
 
-        Input:
-        `video_path:str` -> if `use_camera_stream=True` then enter the video path else leave it as a blank string (Debugging)
+        Input: `video_path:str` -> if `use_camera_stream=True` then enter the video path else leave it as a blank
+        string (Debugging)
 
         Output:
         `None`
