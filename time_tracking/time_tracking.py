@@ -4,18 +4,20 @@ import json
 import pynng
 import cv2
 import os
-from pathlib import Path
 import numpy as np
 
+from pathlib import Path
+from threading import Timer
+
 address_pub_time = "ipc:///tmp/RAAI/lap_times.ipc"
-address_pub_frame = 'ipc:///tmp/RAAI/timer_frame.ipc'
-address_rec_coordinates = 'ipc:///tmp/RAAI/vehicle_coordinates.ipc'
-address_rec_coordinates_fallback = 'ipc:///tmp/RAAI/vehicle_coordinates_fallback.ipc'
-address_rec_frame = 'ipc:///tmp/RAAI/tracker_frame.ipc'
+address_pub_frame = "ipc:///tmp/RAAI/timer_frame.ipc"
+address_rec_coordinates = "ipc:///tmp/RAAI/vehicle_coordinates.ipc"
+address_rec_coordinates_fallback = "ipc:///tmp/RAAI/vehicle_coordinates_fallback.ipc"
+address_rec_frame = "ipc:///tmp/RAAI/tracker_frame.ipc"
 
 
 def read_config(config_file_path: str) -> dict:
-    with open(config_file_path, 'r') as file:
+    with open(config_file_path, "r") as file:
         return json.load(file)
 
 
@@ -34,8 +36,22 @@ def find_config_file(relative_path: str) -> bool:
     return False
 
 
-class Timer:
-    def __init__(self, config_file_path='time_tracking.json', p_fallback: bool = False, test: bool = False):
+def run_scheduled_task(p_time: int, scheduled_task, arg=None) -> None:
+    """
+    Args:
+        p_time: time till the method will be executed
+        scheduled_task: method that should be run
+        arg: argument that should be passed to the method
+
+    Returns:
+        None
+    """
+    threading_timer = Timer(p_time, scheduled_task, [arg])
+    threading_timer.start()
+
+
+class LapTimer:
+    def __init__(self, config_file_path="time_tracking.json", p_fallback: bool = False, test: bool = False):
         # initialise variables
         self.__test = test
         self.coordinates_list: list = []
@@ -109,7 +125,7 @@ class Timer:
                             self.checkpoint_update(checkpoint.get_num())
         else:
             received_bytes = self.__sub_coordinates.recv()
-            num = int.from_bytes(received_bytes, 'big')
+            num = int.from_bytes(received_bytes, "big")
             self.checkpoint_update(num)
             if num != 3:
                 self.__checkpoints[num].set_crossed(True)
@@ -187,7 +203,7 @@ class Timer:
 
     def receive_coordinates(self) -> tuple:
         msg = self.__sub_coordinates.recv()
-        json_data = msg.decode('utf-8')
+        json_data = msg.decode("utf-8")
         coordinates = json.loads(json_data)
         return coordinates
 
@@ -220,9 +236,9 @@ class Timer:
             checkpoint.draw_checkpoint(self.__frame)
 
         self.publish_frame()
-        cv2.imshow('Debug', self.__frame)
+        cv2.imshow("Debug", self.__frame)
 
-        if cv2.waitKey(1) & 0xFF == ord('s'):
+        if cv2.waitKey(1) & 0xFF == ord("s"):
             cv2.destroyAllWindows()
 
     def __define_frame_receiver(self) -> None:
@@ -345,11 +361,10 @@ class FinishLineCheckpoint(Checkpoint):
         super().__init__(checkpoint, p_num)
 
     def check(self, coordinates: list) -> bool:
-        if self.get_crossed() is True:
+        if self.get_crossed() is False:
             if self.check_line(coordinates):
+                run_scheduled_task(2, self.set_crossed, False)
                 return True
-        else:
-            self.check_line(coordinates, 40)
         return False
 
 
@@ -366,7 +381,7 @@ class SectorLineCheckpoint(Checkpoint):
 
 class CheckpointDefiner:
     # Initialization
-    def __init__(self, p_use_camera_stream: bool = True, video_path: str = '') -> None:
+    def __init__(self, p_use_camera_stream: bool = True, video_path: str = "") -> None:
         """
         Initializes the class.
 
@@ -374,7 +389,7 @@ class CheckpointDefiner:
 
             Debugging Only (!!DO NOT USE!!):
             `use_camera_stream:bool = True` -> If set to false it will show the video on the given `video_path`
-            `video_path:str = ''` -> If use_camera_stream is set to false it will try to read this video
+            `video_path:str = ""` -> If use_camera_stream is set to false it will try to read this video
 
         Output:
         `None`
@@ -407,7 +422,7 @@ class CheckpointDefiner:
             self.__video_cap = cv2.VideoCapture(video_path)
             success, self.__frame = self.__video_cap.read()
             if not success:
-                raise FileNotFoundError('Could not read the first frame of the video.')
+                raise FileNotFoundError("Could not read the first frame of the video.")
 
     def __define_image_receiver(self) -> None:
         """
@@ -417,7 +432,7 @@ class CheckpointDefiner:
         `None`
         """
         self.__frame_receiver = pynng.Sub0()
-        self.__frame_receiver.subscribe('')
+        self.__frame_receiver.subscribe("")
         self.__frame_receiver.dial(address_rec_frame)
 
     def __define_windows(self) -> None:
@@ -427,9 +442,9 @@ class CheckpointDefiner:
         Input/Output:
         `None`
         """
-        cv2.namedWindow('Point Drawer')
+        cv2.namedWindow("Point Drawer")
 
-        cv2.setMouseCallback('Point Drawer', self.__mouse_event_handler)
+        cv2.setMouseCallback("Point Drawer", self.__mouse_event_handler)
 
     # Mouse Handler
     def __mouse_event_handler(self, event: int, x: int, y: int, _flags, _params) -> None:
@@ -476,7 +491,7 @@ class CheckpointDefiner:
         else:
             success, self.__frame = self.__video_cap.read()
             if not success:
-                raise IndexError('Frame could not be read. Video probably ended.')
+                raise IndexError("Frame could not be read. Video probably ended.")
 
     def __draw_on_frame(self) -> None:
         """
@@ -499,7 +514,7 @@ class CheckpointDefiner:
         Input/Output:
         `None`
         """
-        cv2.imshow('Point Drawer', self.__lined_frame)
+        cv2.imshow("Point Drawer", self.__lined_frame)
 
     def __check_to_close(self) -> None:
         """
@@ -509,7 +524,7 @@ class CheckpointDefiner:
         None
         """
 
-        if cv2.waitKey(1) & 0xFF == ord('q'):
+        if cv2.waitKey(1) & 0xFF == ord("q"):
             cv2.destroyAllWindows()
             self.__save_config()
             self.__close = True
@@ -524,7 +539,7 @@ class CheckpointDefiner:
         for line in self.__roi_points:
             self.__checkpoints["checkpoints"].append(
                 {"x1": line[0][0], "y1": line[0][1], "x2": line[1][0], "y2": line[1][1]})
-        with open('time_tracking.json', 'w') as f:
+        with open("time_tracking.json", "w") as f:
             json.dump(self.__checkpoints, f, indent=4)
 
     # Main Functions
