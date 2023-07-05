@@ -22,11 +22,7 @@ def read_config(config_file_path: str) -> dict:
 
 
 def find_config_file(relative_path: str) -> bool:
-    search_directory_list = [
-        Path(os.getcwd()),
-        Path(os.getcwd()).parent,
-        Path(__file__).parent
-    ]
+    search_directory_list = [Path(os.getcwd()), Path(os.getcwd()).parent, Path(__file__).parent]
     for directory in search_directory_list:
         filepath = directory / relative_path
         if filepath.is_file():
@@ -66,16 +62,19 @@ class LapTimer:
 
         # getting best times from database interface
         self.__best_times = self.request_best_times()
-        self.__pers_best_times = {"sector_1_best_time": 1000.0, "sector_2_best_time": 1000.0,
-                                  "sector_3_best_time": 1000.0, "lap_best_time": 1000.0}
+        self.__pers_best_times = {
+            "sector_1_best_time": 1000.0,
+            "sector_2_best_time": 1000.0,
+            "sector_3_best_time": 1000.0,
+            "lap_best_time": 1000.0,
+        }
 
         # getting checkpoint positions from config file
         if find_config_file(config_file_path) is False:
             if self.__test is False:
                 self.__definer = CheckpointDefiner()
             else:
-                self.__definer = CheckpointDefiner(p_use_camera_stream=False,
-                                                   video_path=self.__video_path)
+                self.__definer = CheckpointDefiner(p_use_camera_stream=False, video_path=self.__video_path)
             self.__definer.main()
 
         self.__config = read_config(config_file_path)
@@ -187,8 +186,12 @@ class LapTimer:
             return "yellow"
 
     def request_best_times(self) -> dict:
-        best_times = {"sector_1_best_time": 9.87, "sector_2_best_time": 4.08, "sector_3_best_time": 5.53,
-                      "lap_best_time": 19.48}
+        best_times = {
+            "sector_1_best_time": 9.87,
+            "sector_2_best_time": 4.08,
+            "sector_3_best_time": 5.53,
+            "lap_best_time": 19.48,
+        }
         return best_times
 
     def __define_coordinate_receiver(self) -> None:
@@ -209,8 +212,12 @@ class LapTimer:
 
     def send_sector(self, p_sector: int, p_time: float, p_valid: bool) -> None:
         self.__payload.clear()
-        self.__payload = {"sector_number": p_sector, "sector_time": p_time, "sector_valid": p_valid,
-                          "type": self.calc_type(p_time, f"sector_{p_sector}", True)}
+        self.__payload = {
+            "sector_number": p_sector,
+            "sector_time": p_time,
+            "sector_valid": p_valid,
+            "type": self.calc_type(p_time, f"sector_{p_sector}", True),
+        }
         msg = self.__payload
         self.send_data(msg, f"sector_finished: ")
 
@@ -282,8 +289,7 @@ class Point:
 
     def prf_area(self, p2, sx, sy) -> bool:
         # checks if the intersection is on the calculated lines
-        if min(self[0], p2[0]) <= sx <= max(self[0], p2[0]) and min(self[1], p2[1]) <= \
-                sy <= max(self[1], p2[1]):
+        if min(self[0], p2[0]) <= sx <= max(self[0], p2[0]) and min(self[1], p2[1]) <= sy <= max(self[1], p2[1]):
             return True
         return False
 
@@ -327,7 +333,11 @@ class Checkpoint:
         pts = pts.reshape((-1, 1, 2))
         cv2.polylines(img, [pts], True, (0, 0, 255), 3)
 
-    def check_line(self, p_points: list, i: int = 0, ) -> bool:
+    def check_line(
+        self,
+        p_points: list,
+        i: int = 0,
+    ) -> bool:
         # checks if the car drives through the given Pixels
         if p_points[0].calc_intersection(p_points[1], self, i):
             self.__crossed = True
@@ -503,8 +513,7 @@ class CheckpointDefiner:
         self.__lined_frame = self.__frame.copy()
         if len(self.__roi_points) >= 1:
             for line in self.__roi_points:
-                self.__lined_frame = cv2.polylines(self.__lined_frame, [np.array(line)], True, (0, 0, 255),
-                                                   2)
+                self.__lined_frame = cv2.polylines(self.__lined_frame, [np.array(line)], True, (0, 0, 255), 2)
             self.__updated_frame = np.zeros_like(self.__frame)
 
     def __show_images(self) -> None:
@@ -538,7 +547,8 @@ class CheckpointDefiner:
         """
         for line in self.__roi_points:
             self.__checkpoints["checkpoints"].append(
-                {"x1": line[0][0], "y1": line[0][1], "x2": line[1][0], "y2": line[1][1]})
+                {"x1": line[0][0], "y1": line[0][1], "x2": line[1][0], "y2": line[1][1]}
+            )
         with open("time_tracking.json", "w") as f:
             json.dump(self.__checkpoints, f, indent=4)
 
