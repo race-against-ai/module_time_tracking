@@ -106,8 +106,12 @@ class LapTimer:
         self.checkpoint_check()
 
     def checkpoint_check(self) -> None:
-        # loops through every "checkpoint" and checks if the car went through. When that happens it sets the helper
-        # variable to True. If the finish line is activated it checks if the lap counts using the crossed variable
+        """
+        loops through every "checkpoint" and checks if the car went through. When that happens it sets the helper
+        variable to True. If the finish line is activated it checks if the lap counts using the crossed variable
+
+        Returns: none
+        """
         if self.__fallback is False:
             coordinates = Point(self.receive_coordinates())
             self.coordinates_list.append(coordinates)
@@ -133,7 +137,14 @@ class LapTimer:
                 self.lap_update(self.lap_valid())
 
     def lap_update(self, correct: bool) -> None:
-        # calculates the lap time
+        """
+        calculates the lap time, resets the crossed variables, sending lap data, start new lap(send_lap, lap start)
+        Args:
+            correct: if the lap was driven correct (car drove through all checkpoints)
+
+        Returns: none
+
+        """
         if self.__last_lap_time != 0:
             lap_time = round(time.time() - self.__last_lap_time, 2)
         else:
@@ -141,16 +152,20 @@ class LapTimer:
 
         self.__last_lap_time = time.time()
 
-        # resets sections
         for checkpoint in self.__checkpoints:
             checkpoint.set_crossed(False)
 
-        # sending data
         self.send_lap(lap_time, correct)
         self.send_lap_start()
 
     def checkpoint_update(self, n: int) -> None:
-        # calculate checkpoint times
+        """
+        calculate checkpoint times and sends the sector information via pynng(send_sector)
+        Args:
+            n: sector number
+
+        Returns: none
+        """
         if self.__last_checkpoint_time != 0:
             in_lap_time = round((time.time() - self.__last_checkpoint_time), 2)
         else:
@@ -162,15 +177,26 @@ class LapTimer:
         self.send_sector(n, in_lap_time, True)
 
     def lap_valid(self) -> bool:
-        # checks if lap is correct (car driven through every section)
+        """
+        checks if lap is correct (car driven through every section)
+        Returns: boolean
+        """
         for checkpoint in self.__checkpoints:
             if checkpoint.get_crossed() is False:
                 return False
         return True
 
     def calc_type(self, p_time: float, p_sector: str, p_valid: bool) -> str:
-        # calculates if the time is an alltime best(purple), personal best(green) or just a normal time(orange)
-        # changes the alltime and personal best values if necessary
+        """
+         calculates if the time is an alltime best(purple), personal best(green) or just a normal time(orange)
+         changes the alltime and personal best values if necessary
+        Args:
+            p_time: sector time
+            p_sector: which sector
+            p_valid: if the sector was driven correct
+
+        Returns: string
+        """
         if p_time < self.__best_times[f"{p_sector}_best_time"]:
             if p_valid:
                 self.__best_times[f"{p_sector}_best_time"] = p_time
@@ -197,7 +223,7 @@ class LapTimer:
     def __define_coordinate_receiver(self) -> None:
         if self.__fallback is False:
             self.__sub_coordinates = pynng.Sub0()
-            self.__sub_coordinates.subscribe("")
+            self.__sub_coordinates.subscribe("pixel_coordinates")
             self.__sub_coordinates.dial(address_rec_coordinates)
         else:
             self.__sub_coordinates = pynng.Sub0()
@@ -206,7 +232,9 @@ class LapTimer:
 
     def receive_coordinates(self) -> tuple:
         msg = self.__sub_coordinates.recv()
-        json_data = msg.decode("utf-8")
+        i = msg.find(" ")
+        data = msg[i + 1:]
+        json_data = data.decode("utf-8")
         coordinates = json.loads(json_data)
         return coordinates
 
@@ -238,6 +266,13 @@ class LapTimer:
         self.__pub_time.send(msg.encode())
 
     def draw(self) -> None:
+        """
+        reads the new frame, loops through the checkpoints and draws them on the picture. Then the frame is published
+        via pynng and showed
+
+        Input/Output:
+            None
+        """
         self.__read_new_frame()
         for checkpoint in self.__checkpoints:
             checkpoint.draw_checkpoint(self.__frame)
@@ -267,6 +302,12 @@ class LapTimer:
             self.__frame = np.frombuffer(image, dtype=np.uint8).reshape((990, 1332, 3))
 
     def publish_frame(self) -> None:
+        """
+        sends the frame via pynng
+
+        Input/Output:
+        None
+        """
         frame_np_array = np.array(self.__frame)
         frame_bytes = frame_np_array.tobytes()
         self.__pub_time.send(frame_bytes)
@@ -288,18 +329,33 @@ class Point:
         return self.__y
 
     def prf_area(self, p2, sx, sy) -> bool:
-        # checks if the intersection is on the calculated lines
+        """
+        checks if the intersection is on the calculated lines
+        Args:
+            p2: checkpoint coordinate
+            sx: intersection x coordinate
+            sy: intersection y coordinate
+        Returns: boolean
+
+        """
         if min(self[0], p2[0]) <= sx <= max(self[0], p2[0]) and min(self[1], p2[1]) <= sy <= max(self[1], p2[1]):
             return True
         return False
 
-    def calc_intersection(self, p_point, p_checkpoint, i: int = 0) -> bool:
+    def calc_intersection(self, p_point, p_checkpoint) -> bool:
+        """
+        calculates the intersection of 2 infinite lines using vectors and then checking if the intersection is on the
+        checkpoint pixels
+        Args:
+            p_point: list of 2 points received from the vehicle tracking module
+            p_checkpoint: the checkpoint with that the intersection shouldbe checked
+        Returns: boolean
+        """
         def det(a, b):
             return a[0] * b[1] - a[1] * b[0]
 
-        # calculates the intersection of 2 infinite lines
-        p1 = Point((p_checkpoint.get_x1(), p_checkpoint.get_y1() - i))
-        p2 = Point((p_checkpoint.get_x2(), p_checkpoint.get_y2() - i))
+        p1 = Point((p_checkpoint.get_x1(), p_checkpoint.get_y1()))
+        p2 = Point((p_checkpoint.get_x2(), p_checkpoint.get_y2()))
         q1 = Point((self.get_x(), self.get_y()))
         q2 = Point((p_point.get_x(), p_point.get_y()))
 
@@ -329,6 +385,12 @@ class Checkpoint:
         self.__num = p_num
 
     def draw_checkpoint(self, img) -> None:
+        """
+        Draws the checkpoints on the picture
+
+        Input/Output:
+        `None`
+        """
         pts = np.array([[self.__x1, self.__y1], [self.__x2, self.__y2]])
         pts = pts.reshape((-1, 1, 2))
         cv2.polylines(img, [pts], True, (0, 0, 255), 3)
@@ -336,10 +398,14 @@ class Checkpoint:
     def check_line(
         self,
         p_points: list,
-        i: int = 0,
     ) -> bool:
-        # checks if the car drives through the given Pixels
-        if p_points[0].calc_intersection(p_points[1], self, i):
+        """
+        checks if the car drives through the given Pixels
+        input:
+            p_points: list of coordinates received from the vehicle tracking
+        Returns: boolean
+        """
+        if p_points[0].calc_intersection(p_points[1], self):
             self.__crossed = True
             return True
         return False
@@ -436,7 +502,7 @@ class CheckpointDefiner:
 
     def __define_image_receiver(self) -> None:
         """
-        Defines the image receiver, so it can receive the camera's images.
+        Defines the image receiver, so it can receive the images from the  time_tracking module.
 
         Input/Output:
         `None`
