@@ -233,7 +233,7 @@ class LapTimer:
     def receive_coordinates(self) -> tuple:
         msg = self.__sub_coordinates.recv()
         i = msg.find(" ")
-        data = msg[i + 1:]
+        data = msg[i + 1 :]
         json_data = data.decode("utf-8")
         coordinates = json.loads(json_data)
         return coordinates
@@ -351,6 +351,7 @@ class Point:
             p_checkpoint: the checkpoint with that the intersection shouldbe checked
         Returns: boolean
         """
+
         def det(a, b):
             return a[0] * b[1] - a[1] * b[0]
 
