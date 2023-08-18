@@ -9,12 +9,6 @@ import numpy as np
 from pathlib import Path
 from threading import Timer
 
-address_pub_time = "ipc:///tmp/RAAI/lap_times.ipc"
-address_pub_frame = "ipc:///tmp/RAAI/timer_frame.ipc"
-address_rec_coordinates = "ipc:///tmp/RAAI/vehicle_coordinates.ipc"
-address_rec_coordinates_fallback = "ipc:///tmp/RAAI/vehicle_coordinates_fallback.ipc"
-address_rec_frame = "ipc:///tmp/RAAI/tracker_frame.ipc"
-
 
 def read_config(config_file_path: str) -> dict:
     with open(config_file_path, "r") as file:
@@ -58,7 +52,7 @@ class LapTimer:
         self.__payload: dict = {}
         self.__checkpoint_drawn = False
         self.__fallback = p_fallback
-        self.__video_path = "C:/Users/VWF6GWD/Desktop/Race against ai workspace/TestVideo/drive_990p.h265"
+        self.__video_path = "C:/Users/VWF6GWD/Desktop/Race_against_ai_workspace/TestVideo/drive_990p.h265"
 
         # getting best times from database interface
         self.__best_times = self.request_best_times()
@@ -81,6 +75,8 @@ class LapTimer:
         self.__number_of_checkpoints = len(self.__config["checkpoints"])
         self.__checkpoint_list = self.__config["checkpoints"]
 
+        self.__pynng_config = read_config("time_tracking_config.json")
+
         self.__define_coordinate_receiver()
         self.__define_frame_receiver()
 
@@ -92,10 +88,10 @@ class LapTimer:
 
         # setting up a pynng sockets
         self.__pub_time = pynng.Pub0()
-        self.__pub_time.listen(address_pub_time)
+        self.__pub_time.listen(self.__pynng_config["pynng"]["publishers"]["__pub_time"]["address"])
 
         self.__pub_frame = pynng.Pub0()
-        self.__pub_frame.listen(address_pub_frame)
+        self.__pub_frame.listen(self.__pynng_config["pynng"]["publishers"]["__pub_frame"]["address"])
 
     def start_timer(self) -> None:
         self.__start_time = time.time()
@@ -223,12 +219,16 @@ class LapTimer:
     def __define_coordinate_receiver(self) -> None:
         if self.__fallback is False:
             self.__sub_coordinates = pynng.Sub0()
-            self.__sub_coordinates.subscribe("pixel_coordinates")
-            self.__sub_coordinates.dial(address_rec_coordinates)
+            self.__sub_coordinates.subscribe(
+                self.__pynng_config["pynng"]["subscribers"]["__sub_coordinates"]["topics"]["pixel_coordinates"]
+            )
+            self.__sub_coordinates.dial(self.__pynng_config["pynng"]["subscribers"]["__sub_coordinates"]["address"])
         else:
             self.__sub_coordinates = pynng.Sub0()
             self.__sub_coordinates.subscribe("")
-            self.__sub_coordinates.dial(address_rec_coordinates_fallback)
+            self.__sub_coordinates.dial(
+                self.__pynng_config["pynng"]["subscribers"]["__sub_coordinates_fallback"]["address"]
+            )
 
     def receive_coordinates(self) -> tuple:
         msg = self.__sub_coordinates.recv()
@@ -247,20 +247,21 @@ class LapTimer:
             "type": self.calc_type(p_time, f"sector_{p_sector}", True),
         }
         msg = self.__payload
-        self.send_data(msg, f"sector_finished: ")
+        self.send_data(msg, self.__pynng_config["pynng"]["publishers"]["__pub_time"]["topics"]["sector:finished"])
 
     def send_lap(self, p_time: float, p_valid: bool) -> None:
         self.__payload.clear()
         self.__payload = {"lap_time": p_time, "lap_valid": p_valid, "type": self.calc_type(p_time, "lap", p_valid)}
         msg = self.__payload
-        self.send_data(msg, f"lap_finished: ")
+        self.send_data(msg, self.__pynng_config["pynng"]["publishers"]["__pub_time"]["topics"]["lap_finished"])
 
     def send_lap_start(self) -> None:
         msg = self.__best_times
-        self.send_data(msg, "lap_start: ")
+        self.send_data(msg, self.__pynng_config["pynng"]["publishers"]["__pub_time"]["topics"]["lap_start"])
 
     def send_data(self, p_dict: dict, p_topic: str) -> None:
         json_data = json.dumps(p_dict)
+        p_topic += " "
         msg = p_topic + json_data
         print(msg)
         self.__pub_time.send(msg.encode())
@@ -286,7 +287,7 @@ class LapTimer:
     def __define_frame_receiver(self) -> None:
         self.__sub_frame = pynng.Sub0()
         self.__sub_frame.subscribe("")
-        self.__sub_frame.dial(address_rec_frame)
+        self.__sub_frame.dial(self.__pynng_config["pynng"]["subscribers"]["__sub_frame"]["address"])
 
     def __read_new_frame(self) -> None:
         """
@@ -310,7 +311,7 @@ class LapTimer:
         """
         frame_np_array = np.array(self.__frame)
         frame_bytes = frame_np_array.tobytes()
-        self.__pub_time.send(frame_bytes)
+        self.__pub_frame.send(frame_bytes)
 
 
 class Point:
@@ -477,6 +478,8 @@ class CheckpointDefiner:
         self.__checkpoints: dict = {"checkpoints": []}
         self.__use_camera_stream: bool = p_use_camera_stream
 
+        self.__pynng_config = read_config("time_tracking_config.json")
+
         self.__define_cap(video_path)
         self.__define_windows()
 
@@ -510,7 +513,7 @@ class CheckpointDefiner:
         """
         self.__frame_receiver = pynng.Sub0()
         self.__frame_receiver.subscribe("")
-        self.__frame_receiver.dial(address_rec_frame)
+        self.__frame_receiver.dial(self.__pynng_config["pynng"]["subscribers"]["__sub_coordinates"]["address"])
 
     def __define_windows(self) -> None:
         """

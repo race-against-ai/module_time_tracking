@@ -1,0 +1,34 @@
+{
+  "pynng": {
+    "publishers": {
+      "__pub_time": {
+        "address": "ipc:///tmp/RAAI/lap_times.ipc",
+        "topics": {
+          "lap_finished": "lap_finished",
+          "sector:finished": "sector_finished",
+          "lap_start": "lap_start"
+        }
+      },
+      "__pub_frame": {
+        "address": "ipc:///tmp/RAAI/timer_frame.ipc",
+        "topics": {}
+      }
+    },
+    "subscribers": {
+      "__sub_coordinates": {
+        "address": "ipc:///tmp/RAAI/vehicle_coordinates.ipc",
+        "topics": {
+          "pixel_coordinates": "pixel_coordinates"
+        }
+      },
+      "__sub_coordinates_fallback": {
+        "address": "ipc:///tmp/RAAI/vehicle_coordinates_fallback.ipc",
+        "topics": {}
+      },
+      "__sub_frame": {
+        "address": "ipc:///tmp/RAAI/tracker_frame.ipc",
+        "topics": {}
+      }
+    }
+    }
+  }
