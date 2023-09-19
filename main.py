@@ -3,7 +3,7 @@ from time_tracking.time_tracking import LapTimer
 
 if __name__ == "__main__":
     print("Time-tracking started")
-    timer = LapTimer(test=True)
+    timer = LapTimer()
     timer.start_timer()
     while True:
         timer.run()

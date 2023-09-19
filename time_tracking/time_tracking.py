@@ -11,8 +11,12 @@ from threading import Timer
 
 
 def read_config(config_file_path: str) -> dict:
-    with open(config_file_path, "r") as file:
-        return json.load(file)
+    search_directory_list = [Path(os.getcwd()), Path(os.getcwd()).parent, Path(__file__).parent]
+    for directory in search_directory_list:
+        filepath = directory / config_file_path
+        if filepath.is_file():
+            with open(config_file_path, "r") as file:
+                return json.load(file)
 
 
 def find_config_file(relative_path: str) -> bool:
