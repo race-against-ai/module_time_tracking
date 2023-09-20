@@ -17,6 +17,8 @@ def read_config(config_file_path: str) -> dict:
         if filepath.is_file():
             with open(config_file_path, "r") as file:
                 return json.load(file)
+    print("----!File not found!----")
+    return {}
 
 
 def find_config_file(relative_path: str) -> bool:
@@ -57,6 +59,7 @@ class LapTimer:
         self.__checkpoint_drawn = False
         self.__fallback = p_fallback
         self.__video_path = "C:/Users/VWF6GWD/Desktop/Race_against_ai_workspace/TestVideo/drive_990p.h265"
+        self.__user: str = "anon"
 
         # getting best times from database interface
         self.__best_times = self.request_best_times()
@@ -83,6 +86,7 @@ class LapTimer:
 
         self.__define_coordinate_receiver()
         self.__define_frame_receiver()
+        self.__define_user_receiver()
 
         for i in range(self.__number_of_checkpoints):
             if i == 0:
@@ -104,6 +108,9 @@ class LapTimer:
     def run(self):
         self.draw()
         self.checkpoint_check()
+        self.__user = self.receive_user()
+        if self.__user is not None:
+            self.change_user(self.__user)
 
     def checkpoint_check(self) -> None:
         """
@@ -245,6 +252,7 @@ class LapTimer:
     def send_sector(self, p_sector: int, p_time: float, p_valid: bool) -> None:
         self.__payload.clear()
         self.__payload = {
+            "current_driver": self.__user,
             "sector_number": p_sector,
             "sector_time": p_time,
             "sector_valid": p_valid,
@@ -255,7 +263,12 @@ class LapTimer:
 
     def send_lap(self, p_time: float, p_valid: bool) -> None:
         self.__payload.clear()
-        self.__payload = {"lap_time": p_time, "lap_valid": p_valid, "type": self.calc_type(p_time, "lap", p_valid)}
+        self.__payload = {
+            "current_driver": self.__user,
+            "lap_time": p_time,
+            "lap_valid": p_valid,
+            "type": self.calc_type(p_time, "lap", p_valid),
+        }
         msg = self.__payload
         self.send_data(msg, self.__pynng_config["pynng"]["publishers"]["__pub_time"]["topics"]["lap_finished"])
 
@@ -308,7 +321,7 @@ class LapTimer:
 
     def publish_frame(self) -> None:
         """
-        sends the frame via pynng
+        sends the edited frame via pynng
 
         Input/Output:
         None
@@ -316,6 +329,30 @@ class LapTimer:
         frame_np_array = np.array(self.__frame)
         frame_bytes = frame_np_array.tobytes()
         self.__pub_frame.send(frame_bytes)
+
+    def __define_user_receiver(self) -> None:
+        self.__sub_user = pynng.Sub0()
+        self.__sub_user.subscribe(self.__pynng_config["pynng"]["subscribers"]["__sub_user"]["topics"]["current_driver"])
+        self.__sub_user.dial(self.__pynng_config["pynng"]["subscribers"]["__sub_user"]["address"])
+
+    def receive_user(self) -> str | None:
+        try:
+            msg = self.__sub_user.recv(block=False)
+            msg = msg.decode("utf-8")
+            i = msg.find(" ")
+            data = msg[i + 1 :]
+            return data
+        except pynng.TryAgain:
+            return None
+
+    def change_user(self, p_name) -> None:
+        self.__user = p_name
+        self.__pers_best_times = {
+            "sector_1_best_time": 1000.0,
+            "sector_2_best_time": 1000.0,
+            "sector_3_best_time": 1000.0,
+            "lap_best_time": 1000.0,
+        }
 
 
 class Point:

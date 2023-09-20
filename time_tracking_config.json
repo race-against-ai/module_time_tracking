@@ -28,6 +28,12 @@
       "__sub_frame": {
         "address": "ipc:///tmp/RAAI/tracker_frame.ipc",
         "topics": {}
+      },
+      "__sub_user": {
+        "address": "ipc:///tmp/RAAI/current_driver.ipc",
+        "topics": {
+          "current_driver": "current_driver: "
+        }
       }
     }
     }
