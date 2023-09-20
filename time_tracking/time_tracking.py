@@ -71,7 +71,7 @@ class LapTimer:
         self.__checkpoint_drawn = False
         self.__fallback = p_fallback
         self.__video_path = "C:/Users/VWF6GWD/Desktop/Race_against_ai_workspace/TestVideo/drive_990p.h265"
-        self.__user: str = "anon"
+        self.__user: str | None = "anon"
 
         # getting best times from database interface
         self.__best_times = self.request_best_times()
@@ -274,7 +274,7 @@ class LapTimer:
         """
         msg = self.__sub_coordinates.recv()
         i = msg.find(" ")
-        data = msg[i + 1:]
+        data = msg[i + 1 :]
         json_data = data.decode("utf-8")
         coordinates = json.loads(json_data)
         return coordinates
@@ -404,7 +404,7 @@ class LapTimer:
             msg = self.__sub_user.recv(block=False)
             msg = msg.decode("utf-8")
             i = msg.find(" ")
-            data = msg[i + 1:]
+            data = msg[i + 1 :]
             return data
         except pynng.TryAgain:
             return None
@@ -503,8 +503,8 @@ class Checkpoint:
         cv2.polylines(img, [pts], True, (0, 0, 255), 3)
 
     def check_line(
-            self,
-            p_points: list,
+        self,
+        p_points: list,
     ) -> bool:
         """
         checks if the car drives through the given Pixels
