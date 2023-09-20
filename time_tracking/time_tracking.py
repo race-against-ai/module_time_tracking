@@ -124,9 +124,9 @@ class LapTimer:
         """
         self.draw()
         self.checkpoint_check()
-        self.__user = self.receive_user()
-        if self.__user is not None:
-            self.change_user(self.__user)
+        name = self.receive_user()
+        if name is not None:
+            self.change_user(name)
 
     def checkpoint_check(self) -> None:
         """
@@ -368,7 +368,7 @@ class LapTimer:
         None
         """
         image = self.__sub_frame.recv()
-        if self.__test is False:
+        if self.__test is True:
             self.__frame = np.frombuffer(image, dtype=np.uint8).reshape((480, 640, 3))
         else:
             self.__frame = np.frombuffer(image, dtype=np.uint8).reshape((990, 1332, 3))
