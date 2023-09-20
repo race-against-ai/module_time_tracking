@@ -10,18 +10,30 @@ from pathlib import Path
 from threading import Timer
 
 
-def read_config(config_file_path: str) -> dict:
+def read_config(config_file_name: str) -> dict:
+    """
+    Args:
+        config_file_name: name of the config file that should be read
+    Returns:
+        dict
+    """
     search_directory_list = [Path(os.getcwd()), Path(os.getcwd()).parent, Path(__file__).parent]
     for directory in search_directory_list:
-        filepath = directory / config_file_path
+        filepath = directory / config_file_name
         if filepath.is_file():
-            with open(config_file_path, "r") as file:
+            with open(config_file_name, "r") as file:
                 return json.load(file)
     print("----!File not found!----")
     return {}
 
 
 def find_config_file(relative_path: str) -> bool:
+    """
+    Args:
+        relative_path: name of the config file that should be found
+    Returns:
+        bool
+    """
     search_directory_list = [Path(os.getcwd()), Path(os.getcwd()).parent, Path(__file__).parent]
     for directory in search_directory_list:
         filepath = directory / relative_path
@@ -105,7 +117,11 @@ class LapTimer:
         self.__start_time = time.time()
         self.send_lap_start()
 
-    def run(self):
+    def run(self) -> None:
+        """
+        main function
+        Returns: None
+        """
         self.draw()
         self.checkpoint_check()
         self.__user = self.receive_user()
@@ -219,6 +235,11 @@ class LapTimer:
             return "yellow"
 
     def request_best_times(self) -> dict:
+        """
+        request all-time best times from the database
+        Returns:
+            dict
+        """
         best_times = {
             "sector_1_best_time": 9.87,
             "sector_2_best_time": 4.08,
@@ -228,6 +249,11 @@ class LapTimer:
         return best_times
 
     def __define_coordinate_receiver(self) -> None:
+        """
+        defines pynng receiver for the coordinates received from the vehicle tracking component
+        Returns:
+            None
+        """
         if self.__fallback is False:
             self.__sub_coordinates = pynng.Sub0()
             self.__sub_coordinates.subscribe(
@@ -242,14 +268,28 @@ class LapTimer:
             )
 
     def receive_coordinates(self) -> tuple:
+        """
+        receives the coordinates and returns them
+        Returns: tuple
+        """
         msg = self.__sub_coordinates.recv()
         i = msg.find(" ")
-        data = msg[i + 1 :]
+        data = msg[i + 1:]
         json_data = data.decode("utf-8")
         coordinates = json.loads(json_data)
         return coordinates
 
     def send_sector(self, p_sector: int, p_time: float, p_valid: bool) -> None:
+        """
+        is activated when a sector is crossed, prepares the data that should be sent
+
+        Args:
+            p_sector: the sector that was crossed
+            p_time: the time needed for the sector
+            p_valid: if the sector was driven valid
+
+        Returns: None
+        """
         self.__payload.clear()
         self.__payload = {
             "current_driver": self.__user,
@@ -262,6 +302,15 @@ class LapTimer:
         self.send_data(msg, self.__pynng_config["pynng"]["publishers"]["__pub_time"]["topics"]["sector:finished"])
 
     def send_lap(self, p_time: float, p_valid: bool) -> None:
+        """
+        is activated when a lap is finished, prepares the data that should be sent
+
+        Args:
+            p_time: the time needed for the lap
+            p_valid: if the lap was driven valid
+
+        Returns: None
+        """
         self.__payload.clear()
         self.__payload = {
             "current_driver": self.__user,
@@ -302,6 +351,11 @@ class LapTimer:
             cv2.destroyAllWindows()
 
     def __define_frame_receiver(self) -> None:
+        """
+        defines pynng receiver for the frame
+        Returns:
+            None
+        """
         self.__sub_frame = pynng.Sub0()
         self.__sub_frame.subscribe("")
         self.__sub_frame.dial(self.__pynng_config["pynng"]["subscribers"]["__sub_frame"]["address"])
@@ -331,16 +385,26 @@ class LapTimer:
         self.__pub_frame.send(frame_bytes)
 
     def __define_user_receiver(self) -> None:
+        """
+        defines pynng receiver for the current driver
+        Returns:
+            None
+        """
         self.__sub_user = pynng.Sub0()
         self.__sub_user.subscribe(self.__pynng_config["pynng"]["subscribers"]["__sub_user"]["topics"]["current_driver"])
         self.__sub_user.dial(self.__pynng_config["pynng"]["subscribers"]["__sub_user"]["address"])
 
     def receive_user(self) -> str | None:
+        """
+        tries to receive a new user, if no new user was sent it passes
+
+        Returns: str, None
+        """
         try:
             msg = self.__sub_user.recv(block=False)
             msg = msg.decode("utf-8")
             i = msg.find(" ")
-            data = msg[i + 1 :]
+            data = msg[i + 1:]
             return data
         except pynng.TryAgain:
             return None
@@ -439,8 +503,8 @@ class Checkpoint:
         cv2.polylines(img, [pts], True, (0, 0, 255), 3)
 
     def check_line(
-        self,
-        p_points: list,
+            self,
+            p_points: list,
     ) -> bool:
         """
         checks if the car drives through the given Pixels
