@@ -273,7 +273,7 @@ class LapTimer:
         Returns: tuple
         """
         msg = self.__sub_coordinates.recv()
-        i = msg.find(" ")
+        i = msg.find(b" ")
         data = msg[i + 1 :]
         json_data = data.decode("utf-8")
         coordinates = json.loads(json_data)
@@ -600,8 +600,8 @@ class CheckpointDefiner:
         """
         if self.__use_camera_stream:
             self.__define_image_receiver()
-            self.__RESHAPE_VIDEO_SIZE = (480, 640, 3)
-            # self.__RESHAPE_VIDEO_SIZE = (990, 1332, 3)
+            # self.__RESHAPE_VIDEO_SIZE = (480, 640, 3)
+            self.__RESHAPE_VIDEO_SIZE = (990, 1332, 3)
             self.__read_new_frame()
         else:
             self.__video_cap = cv2.VideoCapture(video_path)
@@ -618,7 +618,7 @@ class CheckpointDefiner:
         """
         self.__frame_receiver = pynng.Sub0()
         self.__frame_receiver.subscribe("")
-        self.__frame_receiver.dial(self.__pynng_config["pynng"]["subscribers"]["__sub_coordinates"]["address"])
+        self.__frame_receiver.dial(self.__pynng_config["pynng"]["subscribers"]["__sub_frame"]["address"])
 
     def __define_windows(self) -> None:
         """
