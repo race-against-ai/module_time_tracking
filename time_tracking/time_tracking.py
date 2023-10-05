@@ -12,6 +12,7 @@ from time_tracking.utils import read_config, find_config_file, run_scheduled_tas
 class LapTimer:
     def __init__(self, config_file_path="time_tracking.json", p_fallback: bool = False, test: bool = False):
         # initialise variables
+        self.__connection_state: bool = False
         self.__test = test
         self.coordinates_list: list = []
         self.__start_time: float = 0.0
@@ -25,6 +26,7 @@ class LapTimer:
         self.__user: str | None = "anon"
 
         # getting best times from database interface
+        self.__define_requester()
         self.__best_times = self.request_best_times()
         self.__pers_best_times = {
             "sector_1_best_time": 1000.0,
@@ -103,6 +105,20 @@ class LapTimer:
         self.__sub_user = pynng.Sub0()
         self.__sub_user.subscribe(self.__pynng_config["pynng"]["subscribers"]["__sub_user"]["topics"]["current_driver"])
         self.__sub_user.dial(self.__pynng_config["pynng"]["subscribers"]["__sub_user"]["address"])
+
+    def __define_requester(self) -> None:
+        if not self.__connection_state:
+            request_address = self.__pynng_config["pynng"]["requesters"]["best_times"]["address"]
+            print(f"Connecting to {request_address}")
+            self.__request_socket = pynng.Req0()
+            try:
+                print("Trying to connect")
+                self.__request_socket.dial(request_address, block=True)
+                self.__connection_state = True
+                print("Connected")
+            except pynng.exceptions.ConnectionRefused:
+                print("Connection failed")
+                self.__connection_state = False
 
     # -----lap time segment-----
 
@@ -270,12 +286,19 @@ class LapTimer:
         Returns:
             dict
         """
-        best_times = {
-            "sector_1_best_time": 9.87,
-            "sector_2_best_time": 4.08,
-            "sector_3_best_time": 5.53,
-            "lap_best_time": 19.48,
-        }
+        if self.__connection_state:
+            self.__request_socket.send("get_best_times".encode())
+            print(f"request sent")
+            response = self.__request_socket.recv()
+            response = response.decode('utf-8')
+            best_times = json.loads(response)
+        else:
+            best_times = {
+                "sector_1_best_time": 9.87,
+                "sector_2_best_time": 4.08,
+                "sector_3_best_time": 5.53,
+                "lap_best_time": 19.48,
+            }
         return best_times
 
     def receive_coordinates(self) -> tuple:

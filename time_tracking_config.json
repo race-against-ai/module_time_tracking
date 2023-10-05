@@ -35,6 +35,11 @@
           "current_driver": "current_driver: "
         }
       }
+    },
+    "requesters": {
+      "best_times": {
+        "address": "ipc:///tmp/RAAI/rest_api.ipc"
+      }
     }
     }
   }
