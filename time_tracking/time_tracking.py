@@ -4,9 +4,13 @@ import json
 import pynng
 import cv2
 import numpy as np
+from pathlib import Path
 
 from time_tracking.checkpoint_definer import CheckpointDefiner
-from time_tracking.utils import read_config, find_config_file, run_scheduled_task
+from time_tracking.utils import read_json, find_config_file, run_scheduled_task
+
+# Constants
+CURRENT_DIR = Path(__file__).parent
 
 
 class LapTimer:
@@ -24,6 +28,18 @@ class LapTimer:
         self.__fallback = p_fallback
         self.__video_path = "C:/Users/VWF6GWD/Desktop/Race_against_ai_workspace/TestVideo/drive_990p.h265"
         self.__user: str | None = "anon"
+        self.count = 0
+
+        # getting checkpoint positions from config file
+        if find_config_file(config_file_path) is False and self.__test is False:
+            self.__definer = CheckpointDefiner()
+            self.__definer.main()
+
+        self.__config = read_json(config_file_path)
+        self.__number_of_checkpoints = len(self.__config["checkpoints"])
+        self.__checkpoint_list = self.__config["checkpoints"]
+
+        self.__pynng_config = read_json(str(CURRENT_DIR.parent / "time_tracking_config.json"))
 
         # getting best times from database interface
         self.__define_requester()
@@ -35,23 +51,14 @@ class LapTimer:
             "lap_best_time": 1000.0,
         }
 
-        # getting checkpoint positions from config file
-        if find_config_file(config_file_path) is False:
-            if self.__test is False:
-                self.__definer = CheckpointDefiner()
-            else:
-                self.__definer = CheckpointDefiner(p_use_camera_stream=False, video_path=self.__video_path)
-            self.__definer.main()
-
-        self.__config = read_config(config_file_path)
-        self.__number_of_checkpoints = len(self.__config["checkpoints"])
-        self.__checkpoint_list = self.__config["checkpoints"]
-
-        self.__pynng_config = read_config("time_tracking_config.json")
-
         self.__define_coordinate_receiver()
-        self.__define_frame_receiver()
         self.__define_user_receiver()
+
+        if self.__test:
+            with open("time_tracking_output.json", "w") as f:
+                json.dump({}, f, indent=4)
+        else:
+            self.__define_frame_receiver()
 
         for i in range(self.__number_of_checkpoints):
             if i == 0:
@@ -119,6 +126,57 @@ class LapTimer:
             except pynng.exceptions.ConnectionRefused:
                 print("Connection failed")
                 self.__connection_state = False
+
+    # ----- receive -----
+
+    def request_best_times(self) -> dict:
+        """
+        request all-time best times from the database
+        Returns:
+            dict
+        """
+        if self.__connection_state:
+            self.__request_socket.send("get_best_times".encode())
+            print(f"request sent")
+            response = self.__request_socket.recv()
+            response = response.decode("utf-8")
+            best_times = json.loads(response)
+        else:
+            best_times = {
+                "sector_1_best_time": 9.87,
+                "sector_2_best_time": 4.08,
+                "sector_3_best_time": 5.53,
+                "lap_best_time": 19.48,
+            }
+        return best_times
+
+    def receive_coordinates(self) -> tuple:
+        """
+        receives the coordinates and returns them
+        Returns: tuple
+        """
+        msg = self.__sub_coordinates.recv()
+        i = msg.find(b" ")
+        data = msg[i + 1 :]
+        json_data = data.decode("utf-8")
+        coordinates = json.loads(json_data)
+        print(f"received {coordinates}")
+        return coordinates
+
+    def receive_user(self) -> str | None:
+        """
+        tries to receive a new user, if no new user was sent it passes
+
+        Returns: str, None
+        """
+        try:
+            msg = self.__sub_user.recv(block=False)
+            msg = msg.decode("utf-8")
+            i = msg.find(" ")
+            data = msg[i + 1 :]
+            return data
+        except pynng.TryAgain:
+            return None
 
     # -----lap time segment-----
 
@@ -232,6 +290,13 @@ class LapTimer:
         p_topic += " "
         msg = p_topic + json_data
         print(msg)
+        if self.__test:
+            with open("time_tracking_output.json", "r+") as f:
+                data = json.load(f)
+                data[self.count] = msg
+                self.count += 1
+                f.seek(0)
+                json.dump(data, f, indent=4)
         self.__pub_time.send(msg.encode())
 
     # ----- visualisation -----
@@ -244,15 +309,18 @@ class LapTimer:
         Input/Output:
             None
         """
-        self.__read_new_frame()
-        for checkpoint in self.__checkpoints:
-            checkpoint.draw_checkpoint(self.__frame)
+        if self.__test:
+            pass
+        else:
+            self.__read_new_frame()
+            for checkpoint in self.__checkpoints:
+                checkpoint.draw_checkpoint(self.__frame)
 
-        self.publish_frame()
-        cv2.imshow("Debug", self.__frame)
+            self.publish_frame()
+            cv2.imshow("Debug", self.__frame)
 
-        if cv2.waitKey(1) & 0xFF == ord("s"):
-            cv2.destroyAllWindows()
+            if cv2.waitKey(1) & 0xFF == ord("s"):
+                cv2.destroyAllWindows()
 
     def __read_new_frame(self) -> None:
         """
@@ -277,56 +345,6 @@ class LapTimer:
         frame_np_array = np.array(self.__frame)
         frame_bytes = frame_np_array.tobytes()
         self.__pub_frame.send(frame_bytes)
-
-    # ----- receive -----
-
-    def request_best_times(self) -> dict:
-        """
-        request all-time best times from the database
-        Returns:
-            dict
-        """
-        if self.__connection_state:
-            self.__request_socket.send("get_best_times".encode())
-            print(f"request sent")
-            response = self.__request_socket.recv()
-            response = response.decode('utf-8')
-            best_times = json.loads(response)
-        else:
-            best_times = {
-                "sector_1_best_time": 9.87,
-                "sector_2_best_time": 4.08,
-                "sector_3_best_time": 5.53,
-                "lap_best_time": 19.48,
-            }
-        return best_times
-
-    def receive_coordinates(self) -> tuple:
-        """
-        receives the coordinates and returns them
-        Returns: tuple
-        """
-        msg = self.__sub_coordinates.recv()
-        i = msg.find(b" ")
-        data = msg[i + 1:]
-        json_data = data.decode("utf-8")
-        coordinates = json.loads(json_data)
-        return coordinates
-
-    def receive_user(self) -> str | None:
-        """
-        tries to receive a new user, if no new user was sent it passes
-
-        Returns: str, None
-        """
-        try:
-            msg = self.__sub_user.recv(block=False)
-            msg = msg.decode("utf-8")
-            i = msg.find(" ")
-            data = msg[i + 1:]
-            return data
-        except pynng.TryAgain:
-            return None
 
     # ----- User -----
 
@@ -418,17 +436,17 @@ class LapTimer:
 
 class Point:
     def __init__(self, p_coordinates: tuple) -> None:
-        self.__x = p_coordinates[0]
-        self.__y = p_coordinates[1]
+        self.__x: float = p_coordinates[0]
+        self.__y: float = p_coordinates[1]
 
-    def __getitem__(self, key=0) -> int:
+    def __getitem__(self, key=0) -> float:
         item = (self.__x, self.__y)
         return item[key]
 
-    def get_x(self) -> int:
+    def get_x(self) -> float:
         return self.__x
 
-    def get_y(self) -> int:
+    def get_y(self) -> float:
         return self.__y
 
     def prf_area(self, p2, sx, sy) -> bool:
@@ -481,10 +499,10 @@ class Point:
 
 class Checkpoint:
     def __init__(self, checkpoint: dict, p_num: int) -> None:
-        self.__x1 = checkpoint["x1"]
-        self.__y1 = checkpoint["y1"]
-        self.__x2 = checkpoint["x2"]
-        self.__y2 = checkpoint["y2"]
+        self.__x1: float = checkpoint["x1"]
+        self.__y1: float = checkpoint["y1"]
+        self.__x2: float = checkpoint["x2"]
+        self.__y2: float = checkpoint["y2"]
         self.__crossed = False
         self.__num = p_num
 
@@ -500,8 +518,8 @@ class Checkpoint:
         cv2.polylines(img, [pts], True, (0, 0, 255), 3)
 
     def check_line(
-            self,
-            p_points: list,
+        self,
+        p_points: list,
     ) -> bool:
         """
         checks if the car drives through the given Pixels
@@ -523,16 +541,16 @@ class Checkpoint:
     def get_num(self) -> int:
         return self.__num
 
-    def get_x1(self) -> int:
+    def get_x1(self) -> float:
         return self.__x1
 
-    def get_x2(self) -> int:
+    def get_x2(self) -> float:
         return self.__x2
 
-    def get_y1(self) -> int:
+    def get_y1(self) -> float:
         return self.__y1
 
-    def get_y2(self) -> int:
+    def get_y2(self) -> float:
         return self.__y2
 
 

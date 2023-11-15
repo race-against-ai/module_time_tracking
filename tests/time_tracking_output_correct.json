@@ -1,0 +1,16 @@
+{
+    "0": "lap_start {\"sector_1_best_time\": 9.87, \"sector_2_best_time\": 4.08, \"sector_3_best_time\": 5.53, \"lap_best_time\": 19.48}",
+    "1": "sector_finished {\"current_driver\": \"anon\", \"sector_number\": 3, \"sector_time\": 0.0, \"sector_valid\": true, \"type\": \"purple\"}",
+    "2": "lap_finished {\"current_driver\": \"anon\", \"lap_time\": 0.0, \"lap_valid\": false, \"type\": \"purple\"}",
+    "3": "lap_start {\"sector_1_best_time\": 9.87, \"sector_2_best_time\": 4.08, \"sector_3_best_time\": 0.0, \"lap_best_time\": 19.48}",
+    "4": "sector_finished {\"current_driver\": \"anon\", \"sector_number\": 1, \"sector_time\": 0.0, \"sector_valid\": true, \"type\": \"purple\"}",
+    "5": "sector_finished {\"current_driver\": \"anon\", \"sector_number\": 2, \"sector_time\": 0.0, \"sector_valid\": true, \"type\": \"purple\"}",
+    "6": "sector_finished {\"current_driver\": \"anon\", \"sector_number\": 3, \"sector_time\": 0.0, \"sector_valid\": true, \"type\": \"yellow\"}",
+    "7": "lap_finished {\"current_driver\": \"anon\", \"lap_time\": 0.0, \"lap_valid\": true, \"type\": \"purple\"}",
+    "8": "lap_start {\"sector_1_best_time\": 0.0, \"sector_2_best_time\": 0.0, \"sector_3_best_time\": 0.0, \"lap_best_time\": 0.0}",
+    "9": "sector_finished {\"current_driver\": \"anon\", \"sector_number\": 1, \"sector_time\": 0.0, \"sector_valid\": true, \"type\": \"yellow\"}",
+    "10": "sector_finished {\"current_driver\": \"anon\", \"sector_number\": 2, \"sector_time\": 0.0, \"sector_valid\": true, \"type\": \"yellow\"}",
+    "11": "sector_finished {\"current_driver\": \"anon\", \"sector_number\": 3, \"sector_time\": 0.0, \"sector_valid\": true, \"type\": \"yellow\"}",
+    "12": "lap_finished {\"current_driver\": \"anon\", \"lap_time\": 0.0, \"lap_valid\": true, \"type\": \"yellow\"}",
+    "13": "lap_start {\"sector_1_best_time\": 0.0, \"sector_2_best_time\": 0.0, \"sector_3_best_time\": 0.0, \"lap_best_time\": 0.0}"
+}

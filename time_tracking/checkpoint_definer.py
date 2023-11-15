@@ -4,7 +4,7 @@ import cv2
 import pynng
 import numpy as np
 
-from time_tracking.utils import read_config
+from time_tracking.utils import read_json
 
 
 class CheckpointDefiner:
@@ -28,7 +28,7 @@ class CheckpointDefiner:
         self.__checkpoints: dict = {"checkpoints": []}
         self.__use_camera_stream: bool = p_use_camera_stream
 
-        self.__pynng_config = read_config("time_tracking_config.json")
+        self.__pynng_config = read_json("time_tracking_config.json")
 
         self.__define_cap(video_path)
         self.__define_windows()

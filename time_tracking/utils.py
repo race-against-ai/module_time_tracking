@@ -5,7 +5,7 @@ from pathlib import Path
 from threading import Timer
 
 
-def read_config(config_file_name: str) -> dict:
+def read_json(config_file_name: str) -> dict:
     """
     Args:
         config_file_name: name of the config file that should be read
