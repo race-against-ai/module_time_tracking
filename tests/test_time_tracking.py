@@ -1,13 +1,8 @@
 # Copyright (C) 2023, NG:ITL
-import main
 from tests.mocks.coordinate_generator import CoordinateGenerator
 from time_tracking.time_tracking import LapTimer
 from time_tracking import utils
 from pathlib import Path
-import json
-import numpy as np
-from json import load
-from typing import Any
 import unittest
 
 # Constants
