@@ -33,7 +33,7 @@ class TimeTrackingTest(unittest.TestCase):
             self.generator.send_coordinates(coordinate)
             self.timer.run()
 
-        self.log = utils.read_json(str(CURRENT_DIR / "time_tracking_output.json"))
+        self.log = utils.read_json(str(CURRENT_DIR.parent / "time_tracking_output.json"))
         if self.correct_log == self.log:
             print("yes")
             self.assertTrue(True)
