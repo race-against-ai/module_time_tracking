@@ -25,16 +25,6 @@ class LapTimer:
         self.__video_path = "C:/Users/VWF6GWD/Desktop/Race_against_ai_workspace/TestVideo/drive_990p.h265"
         self.__user: str | None = "anon"
 
-        # getting best times from database interface
-        self.__define_requester()
-        self.__best_times = self.request_best_times()
-        self.__pers_best_times = {
-            "sector_1_best_time": 1000.0,
-            "sector_2_best_time": 1000.0,
-            "sector_3_best_time": 1000.0,
-            "lap_best_time": 1000.0,
-        }
-
         # getting checkpoint positions from config file
         if find_config_file(config_file_path) is False:
             if self.__test is False:
@@ -52,6 +42,16 @@ class LapTimer:
         self.__define_coordinate_receiver()
         self.__define_frame_receiver()
         self.__define_user_receiver()
+
+        # getting best times from database interface
+        self.__define_requester()
+        self.__best_times = self.request_best_times()
+        self.__pers_best_times = {
+            "sector_1_best_time": 1000.0,
+            "sector_2_best_time": 1000.0,
+            "sector_3_best_time": 1000.0,
+            "lap_best_time": 1000.0,
+        }
 
         for i in range(self.__number_of_checkpoints):
             if i == 0:
@@ -290,7 +290,7 @@ class LapTimer:
             self.__request_socket.send("get_best_times".encode())
             print(f"request sent")
             response = self.__request_socket.recv()
-            response = response.decode('utf-8')
+            response = response.decode("utf-8")
             best_times = json.loads(response)
         else:
             best_times = {
@@ -308,7 +308,7 @@ class LapTimer:
         """
         msg = self.__sub_coordinates.recv()
         i = msg.find(b" ")
-        data = msg[i + 1:]
+        data = msg[i + 1 :]
         json_data = data.decode("utf-8")
         coordinates = json.loads(json_data)
         return coordinates
@@ -323,7 +323,7 @@ class LapTimer:
             msg = self.__sub_user.recv(block=False)
             msg = msg.decode("utf-8")
             i = msg.find(" ")
-            data = msg[i + 1:]
+            data = msg[i + 1 :]
             return data
         except pynng.TryAgain:
             return None
@@ -500,8 +500,8 @@ class Checkpoint:
         cv2.polylines(img, [pts], True, (0, 0, 255), 3)
 
     def check_line(
-            self,
-            p_points: list,
+        self,
+        p_points: list,
     ) -> bool:
         """
         checks if the car drives through the given Pixels
