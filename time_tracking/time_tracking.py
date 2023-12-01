@@ -3,50 +3,20 @@ import time
 import json
 import pynng
 import cv2
-import os
 import numpy as np
-
 from pathlib import Path
-from threading import Timer
 
+from time_tracking.checkpoint_definer import CheckpointDefiner
+from time_tracking.utils import read_json, find_config_file, run_scheduled_task
 
-def read_config(config_file_path: str) -> dict:
-    search_directory_list = [Path(os.getcwd()), Path(os.getcwd()).parent, Path(__file__).parent]
-    for directory in search_directory_list:
-        filepath = directory / config_file_path
-        if filepath.is_file():
-            with open(config_file_path, "r") as file:
-                return json.load(file)
-
-
-def find_config_file(relative_path: str) -> bool:
-    search_directory_list = [Path(os.getcwd()), Path(os.getcwd()).parent, Path(__file__).parent]
-    for directory in search_directory_list:
-        filepath = directory / relative_path
-        if filepath.is_file():
-            print("-----!config file exists!-----")
-            return True
-    print("-----!File not found!-----")
-    return False
-
-
-def run_scheduled_task(p_time: int, scheduled_task, arg=None) -> None:
-    """
-    Args:
-        p_time: time till the method will be executed
-        scheduled_task: method that should be run
-        arg: argument that should be passed to the method
-
-    Returns:
-        None
-    """
-    threading_timer = Timer(p_time, scheduled_task, [arg])
-    threading_timer.start()
+# Constants
+CURRENT_DIR = Path(__file__).parent
 
 
 class LapTimer:
     def __init__(self, config_file_path="time_tracking.json", p_fallback: bool = False, test: bool = False):
         # initialise variables
+        self.__connection_state: bool = False
         self.__test = test
         self.coordinates_list: list = []
         self.__start_time: float = 0.0
@@ -57,8 +27,22 @@ class LapTimer:
         self.__checkpoint_drawn = False
         self.__fallback = p_fallback
         self.__video_path = "C:/Users/VWF6GWD/Desktop/Race_against_ai_workspace/TestVideo/drive_990p.h265"
+        self.__user: str | None = "anon"
+        self.count = 0
+
+        # getting checkpoint positions from config file
+        if find_config_file(config_file_path) is False and self.__test is False:
+            self.__definer = CheckpointDefiner()
+            self.__definer.main()
+
+        self.__config = read_json(config_file_path)
+        self.__number_of_checkpoints = len(self.__config["checkpoints"])
+        self.__checkpoint_list = self.__config["checkpoints"]
+
+        self.__pynng_config = read_json(str(CURRENT_DIR.parent / "time_tracking_config.json"))
 
         # getting best times from database interface
+        self.__define_requester()
         self.__best_times = self.request_best_times()
         self.__pers_best_times = {
             "sector_1_best_time": 1000.0,
@@ -67,22 +51,14 @@ class LapTimer:
             "lap_best_time": 1000.0,
         }
 
-        # getting checkpoint positions from config file
-        if find_config_file(config_file_path) is False:
-            if self.__test is False:
-                self.__definer = CheckpointDefiner()
-            else:
-                self.__definer = CheckpointDefiner(p_use_camera_stream=False, video_path=self.__video_path)
-            self.__definer.main()
-
-        self.__config = read_config(config_file_path)
-        self.__number_of_checkpoints = len(self.__config["checkpoints"])
-        self.__checkpoint_list = self.__config["checkpoints"]
-
-        self.__pynng_config = read_config("time_tracking_config.json")
-
         self.__define_coordinate_receiver()
-        self.__define_frame_receiver()
+        self.__define_user_receiver()
+
+        if self.__test:
+            with open("time_tracking_output.json", "w") as f:
+                json.dump({}, f, indent=4)
+        else:
+            self.__define_frame_receiver()
 
         for i in range(self.__number_of_checkpoints):
             if i == 0:
@@ -90,20 +66,303 @@ class LapTimer:
             else:
                 self.__checkpoints.append(SectorLineCheckpoint(self.__checkpoint_list[i], i))
 
-        # setting up a pynng sockets
+        # setting up pynng publisher
         self.__pub_time = pynng.Pub0()
         self.__pub_time.listen(self.__pynng_config["pynng"]["publishers"]["__pub_time"]["address"])
 
         self.__pub_frame = pynng.Pub0()
         self.__pub_frame.listen(self.__pynng_config["pynng"]["publishers"]["__pub_frame"]["address"])
 
-    def start_timer(self) -> None:
-        self.__start_time = time.time()
+    # -----define pynng receiver-----
+    def __define_coordinate_receiver(self) -> None:
+        """
+        defines pynng receiver for the coordinates received from the vehicle tracking component
+        Returns:
+            None
+        """
+        if self.__fallback is False:
+            self.__sub_coordinates = pynng.Sub0()
+            self.__sub_coordinates.subscribe(
+                self.__pynng_config["pynng"]["subscribers"]["__sub_coordinates"]["topics"]["pixel_coordinates"]
+            )
+            self.__sub_coordinates.dial(self.__pynng_config["pynng"]["subscribers"]["__sub_coordinates"]["address"])
+        else:
+            self.__sub_coordinates = pynng.Sub0()
+            self.__sub_coordinates.subscribe("")
+            self.__sub_coordinates.dial(
+                self.__pynng_config["pynng"]["subscribers"]["__sub_coordinates_fallback"]["address"]
+            )
+
+    def __define_frame_receiver(self) -> None:
+        """
+        defines pynng receiver for the frame
+        Returns:
+            None
+        """
+        self.__sub_frame = pynng.Sub0()
+        self.__sub_frame.subscribe("")
+        self.__sub_frame.dial(self.__pynng_config["pynng"]["subscribers"]["__sub_frame"]["address"])
+
+    def __define_user_receiver(self) -> None:
+        """
+        defines pynng receiver for the current driver
+        Returns:
+            None
+        """
+        self.__sub_user = pynng.Sub0()
+        self.__sub_user.subscribe(self.__pynng_config["pynng"]["subscribers"]["__sub_user"]["topics"]["current_driver"])
+        self.__sub_user.dial(self.__pynng_config["pynng"]["subscribers"]["__sub_user"]["address"])
+
+    def __define_requester(self) -> None:
+        if not self.__connection_state:
+            request_address = self.__pynng_config["pynng"]["requesters"]["best_times"]["address"]
+            print(f"Connecting to {request_address}")
+            self.__request_socket = pynng.Req0()
+            try:
+                print("Trying to connect")
+                self.__request_socket.dial(request_address, block=True)
+                self.__connection_state = True
+                print("Connected")
+            except pynng.exceptions.ConnectionRefused:
+                print("Connection failed")
+                self.__connection_state = False
+
+    # ----- receive -----
+
+    def request_best_times(self) -> dict:
+        """
+        request all-time best times from the database
+        Returns:
+            dict
+        """
+        if self.__connection_state:
+            self.__request_socket.send("get_best_times".encode())
+            print(f"request sent")
+            response = self.__request_socket.recv()
+            response = response.decode("utf-8")
+            best_times = json.loads(response)
+        else:
+            best_times = {
+                "sector_1_best_time": 9.87,
+                "sector_2_best_time": 4.08,
+                "sector_3_best_time": 5.53,
+                "lap_best_time": 19.48,
+            }
+        return best_times
+
+    def receive_coordinates(self) -> tuple:
+        """
+        receives the coordinates and returns them
+        Returns: tuple
+        """
+        msg = self.__sub_coordinates.recv()
+        i = msg.find(b" ")
+        data = msg[i + 1 :]
+        json_data = data.decode("utf-8")
+        coordinates = json.loads(json_data)
+        print(f"received {coordinates}")
+        return coordinates
+
+    def receive_user(self) -> str | None:
+        """
+        tries to receive a new user, if no new user was sent it passes
+
+        Returns: str, None
+        """
+        try:
+            msg = self.__sub_user.recv(block=False)
+            msg = msg.decode("utf-8")
+            i = msg.find(" ")
+            data = msg[i + 1 :]
+            return data
+        except pynng.TryAgain:
+            return None
+
+    # -----lap time segment-----
+
+    def lap_update(self, correct: bool) -> None:
+        """
+        calculates the lap time, resets the crossed variables, sending lap data, start new lap(send_lap, lap start)
+        Args:
+            correct: if the lap was driven correct (car drove through all checkpoints)
+
+        Returns: none
+
+        """
+        if self.__last_lap_time != 0:
+            lap_time = round(time.time() - self.__last_lap_time, 2)
+        else:
+            lap_time = round(time.time() - self.__start_time, 2)
+
+        self.__last_lap_time = time.time()
+
+        for checkpoint in self.__checkpoints:
+            checkpoint.set_crossed(False)
+
+        self.send_lap(lap_time, correct)
         self.send_lap_start()
 
-    def run(self):
-        self.draw()
-        self.checkpoint_check()
+    def lap_valid(self) -> bool:
+        """
+        checks if lap is correct (car driven through every section)
+        Returns: boolean
+        """
+        for checkpoint in self.__checkpoints:
+            if checkpoint.get_crossed() is False:
+                return False
+        return True
+
+    def send_lap(self, p_time: float, p_valid: bool) -> None:
+        """
+        is activated when a lap is finished, prepares the data that should be sent
+
+        Args:
+            p_time: the time needed for the lap
+            p_valid: if the lap was driven valid
+
+        Returns: None
+        """
+        self.__payload.clear()
+        self.__payload = {
+            "current_driver": self.__user,
+            "lap_time": p_time,
+            "lap_valid": p_valid,
+            "type": self.calc_type(p_time, "lap", p_valid),
+        }
+        msg = self.__payload
+        self.send_data(msg, self.__pynng_config["pynng"]["publishers"]["__pub_time"]["topics"]["lap_finished"])
+
+    def send_lap_start(self) -> None:
+        msg = self.__best_times
+        self.send_data(msg, self.__pynng_config["pynng"]["publishers"]["__pub_time"]["topics"]["lap_start"])
+
+    # -----checkpoint segment-----
+
+    def checkpoint_update(self, n: int) -> None:
+        """
+        calculate checkpoint times and sends the sector information via pynng(send_sector)
+        Args:
+            n: sector number
+
+        Returns: none
+        """
+        if self.__last_checkpoint_time != 0:
+            in_lap_time = round((time.time() - self.__last_checkpoint_time), 2)
+        else:
+            in_lap_time = round(time.time() - self.__start_time, 2)
+
+        self.__last_checkpoint_time = time.time()
+
+        # sending data
+        self.send_sector(n, in_lap_time, True)
+
+    def send_sector(self, p_sector: int, p_time: float, p_valid: bool) -> None:
+        """
+        is activated when a sector is crossed, prepares the data that should be sent
+
+        Args:
+            p_sector: the sector that was crossed
+            p_time: the time needed for the sector
+            p_valid: if the sector was driven valid
+
+        Returns: None
+        """
+        self.__payload.clear()
+        self.__payload = {
+            "current_driver": self.__user,
+            "sector_number": p_sector,
+            "sector_time": p_time,
+            "sector_valid": p_valid,
+            "type": self.calc_type(p_time, f"sector_{p_sector}", True),
+        }
+        msg = self.__payload
+        self.send_data(msg, self.__pynng_config["pynng"]["publishers"]["__pub_time"]["topics"]["sector:finished"])
+
+    def send_data(self, p_dict: dict, p_topic: str) -> None:
+        """
+        Args:
+            p_dict: information that should be published
+            p_topic: on which topic the information should be published
+        Returns:
+            None
+        """
+        json_data = json.dumps(p_dict)
+        p_topic += " "
+        msg = p_topic + json_data
+        print(msg)
+        if self.__test:
+            with open("time_tracking_output.json", "r+") as f:
+                data = json.load(f)
+                data[self.count] = msg
+                self.count += 1
+                f.seek(0)
+                json.dump(data, f, indent=4)
+        self.__pub_time.send(msg.encode())
+
+    # ----- visualisation -----
+
+    def draw(self) -> None:
+        """
+        reads the new frame, loops through the checkpoints and draws them on the picture. Then the frame is published
+        via pynng and showed
+
+        Input/Output:
+            None
+        """
+        if self.__test:
+            pass
+        else:
+            self.__read_new_frame()
+            for checkpoint in self.__checkpoints:
+                checkpoint.draw_checkpoint(self.__frame)
+
+            self.publish_frame()
+            cv2.imshow("Debug", self.__frame)
+
+            if cv2.waitKey(1) & 0xFF == ord("s"):
+                cv2.destroyAllWindows()
+
+    def __read_new_frame(self) -> None:
+        """
+        Reads the next frame in the video.
+
+        Input/Output:
+        None
+        """
+        image = self.__sub_frame.recv()
+        if self.__test is True:
+            self.__frame = np.frombuffer(image, dtype=np.uint8).reshape((480, 640, 3))
+        else:
+            self.__frame = np.frombuffer(image, dtype=np.uint8).reshape((990, 1332, 3))
+
+    def publish_frame(self) -> None:
+        """
+        sends the edited frame via pynng
+
+        Input/Output:
+        None
+        """
+        frame_np_array = np.array(self.__frame)
+        frame_bytes = frame_np_array.tobytes()
+        self.__pub_frame.send(frame_bytes)
+
+    # ----- User -----
+
+    def change_user(self, p_name) -> None:
+        self.__user = p_name
+        self.__pers_best_times = {
+            "sector_1_best_time": 1000.0,
+            "sector_2_best_time": 1000.0,
+            "sector_3_best_time": 1000.0,
+            "lap_best_time": 1000.0,
+        }
+
+    def user_handler(self) -> None:
+        name = self.receive_user()
+        if name is not None:
+            self.change_user(name)
+
+    # ----- general functions -----
 
     def checkpoint_check(self) -> None:
         """
@@ -136,56 +395,6 @@ class LapTimer:
                 self.__checkpoints[0].set_crossed(True)
                 self.lap_update(self.lap_valid())
 
-    def lap_update(self, correct: bool) -> None:
-        """
-        calculates the lap time, resets the crossed variables, sending lap data, start new lap(send_lap, lap start)
-        Args:
-            correct: if the lap was driven correct (car drove through all checkpoints)
-
-        Returns: none
-
-        """
-        if self.__last_lap_time != 0:
-            lap_time = round(time.time() - self.__last_lap_time, 2)
-        else:
-            lap_time = round(time.time() - self.__start_time, 2)
-
-        self.__last_lap_time = time.time()
-
-        for checkpoint in self.__checkpoints:
-            checkpoint.set_crossed(False)
-
-        self.send_lap(lap_time, correct)
-        self.send_lap_start()
-
-    def checkpoint_update(self, n: int) -> None:
-        """
-        calculate checkpoint times and sends the sector information via pynng(send_sector)
-        Args:
-            n: sector number
-
-        Returns: none
-        """
-        if self.__last_checkpoint_time != 0:
-            in_lap_time = round((time.time() - self.__last_checkpoint_time), 2)
-        else:
-            in_lap_time = round(time.time() - self.__start_time, 2)
-
-        self.__last_checkpoint_time = time.time()
-
-        # sending data
-        self.send_sector(n, in_lap_time, True)
-
-    def lap_valid(self) -> bool:
-        """
-        checks if lap is correct (car driven through every section)
-        Returns: boolean
-        """
-        for checkpoint in self.__checkpoints:
-            if checkpoint.get_crossed() is False:
-                return False
-        return True
-
     def calc_type(self, p_time: float, p_sector: str, p_valid: bool) -> str:
         """
          calculates if the time is an alltime best(purple), personal best(green) or just a normal time(orange)
@@ -211,126 +420,33 @@ class LapTimer:
         else:
             return "yellow"
 
-    def request_best_times(self) -> dict:
-        best_times = {
-            "sector_1_best_time": 9.87,
-            "sector_2_best_time": 4.08,
-            "sector_3_best_time": 5.53,
-            "lap_best_time": 19.48,
-        }
-        return best_times
+    def start_timer(self) -> None:
+        self.__start_time = time.time()
+        self.send_lap_start()
 
-    def __define_coordinate_receiver(self) -> None:
-        if self.__fallback is False:
-            self.__sub_coordinates = pynng.Sub0()
-            self.__sub_coordinates.subscribe(
-                self.__pynng_config["pynng"]["subscribers"]["__sub_coordinates"]["topics"]["pixel_coordinates"]
-            )
-            self.__sub_coordinates.dial(self.__pynng_config["pynng"]["subscribers"]["__sub_coordinates"]["address"])
-        else:
-            self.__sub_coordinates = pynng.Sub0()
-            self.__sub_coordinates.subscribe("")
-            self.__sub_coordinates.dial(
-                self.__pynng_config["pynng"]["subscribers"]["__sub_coordinates_fallback"]["address"]
-            )
-
-    def receive_coordinates(self) -> tuple:
-        msg = self.__sub_coordinates.recv()
-        i = msg.find(" ")
-        data = msg[i + 1 :]
-        json_data = data.decode("utf-8")
-        coordinates = json.loads(json_data)
-        return coordinates
-
-    def send_sector(self, p_sector: int, p_time: float, p_valid: bool) -> None:
-        self.__payload.clear()
-        self.__payload = {
-            "sector_number": p_sector,
-            "sector_time": p_time,
-            "sector_valid": p_valid,
-            "type": self.calc_type(p_time, f"sector_{p_sector}", True),
-        }
-        msg = self.__payload
-        self.send_data(msg, self.__pynng_config["pynng"]["publishers"]["__pub_time"]["topics"]["sector:finished"])
-
-    def send_lap(self, p_time: float, p_valid: bool) -> None:
-        self.__payload.clear()
-        self.__payload = {"lap_time": p_time, "lap_valid": p_valid, "type": self.calc_type(p_time, "lap", p_valid)}
-        msg = self.__payload
-        self.send_data(msg, self.__pynng_config["pynng"]["publishers"]["__pub_time"]["topics"]["lap_finished"])
-
-    def send_lap_start(self) -> None:
-        msg = self.__best_times
-        self.send_data(msg, self.__pynng_config["pynng"]["publishers"]["__pub_time"]["topics"]["lap_start"])
-
-    def send_data(self, p_dict: dict, p_topic: str) -> None:
-        json_data = json.dumps(p_dict)
-        p_topic += " "
-        msg = p_topic + json_data
-        print(msg)
-        self.__pub_time.send(msg.encode())
-
-    def draw(self) -> None:
+    def run(self) -> None:
         """
-        reads the new frame, loops through the checkpoints and draws them on the picture. Then the frame is published
-        via pynng and showed
-
-        Input/Output:
-            None
+        main function
+        Returns: None
         """
-        self.__read_new_frame()
-        for checkpoint in self.__checkpoints:
-            checkpoint.draw_checkpoint(self.__frame)
-
-        self.publish_frame()
-        cv2.imshow("Debug", self.__frame)
-
-        if cv2.waitKey(1) & 0xFF == ord("s"):
-            cv2.destroyAllWindows()
-
-    def __define_frame_receiver(self) -> None:
-        self.__sub_frame = pynng.Sub0()
-        self.__sub_frame.subscribe("")
-        self.__sub_frame.dial(self.__pynng_config["pynng"]["subscribers"]["__sub_frame"]["address"])
-
-    def __read_new_frame(self) -> None:
-        """
-        Reads the next frame in the video.
-
-        Input/Output:
-        None
-        """
-        image = self.__sub_frame.recv()
-        if self.__test is False:
-            self.__frame = np.frombuffer(image, dtype=np.uint8).reshape((480, 640, 3))
-        else:
-            self.__frame = np.frombuffer(image, dtype=np.uint8).reshape((990, 1332, 3))
-
-    def publish_frame(self) -> None:
-        """
-        sends the frame via pynng
-
-        Input/Output:
-        None
-        """
-        frame_np_array = np.array(self.__frame)
-        frame_bytes = frame_np_array.tobytes()
-        self.__pub_frame.send(frame_bytes)
+        self.draw()
+        self.checkpoint_check()
+        self.user_handler()
 
 
 class Point:
     def __init__(self, p_coordinates: tuple) -> None:
-        self.__x = p_coordinates[0]
-        self.__y = p_coordinates[1]
+        self.__x: float = p_coordinates[0]
+        self.__y: float = p_coordinates[1]
 
-    def __getitem__(self, key=0) -> int:
+    def __getitem__(self, key=0) -> float:
         item = (self.__x, self.__y)
         return item[key]
 
-    def get_x(self) -> int:
+    def get_x(self) -> float:
         return self.__x
 
-    def get_y(self) -> int:
+    def get_y(self) -> float:
         return self.__y
 
     def prf_area(self, p2, sx, sy) -> bool:
@@ -383,10 +499,10 @@ class Point:
 
 class Checkpoint:
     def __init__(self, checkpoint: dict, p_num: int) -> None:
-        self.__x1 = checkpoint["x1"]
-        self.__y1 = checkpoint["y1"]
-        self.__x2 = checkpoint["x2"]
-        self.__y2 = checkpoint["y2"]
+        self.__x1: float = checkpoint["x1"]
+        self.__y1: float = checkpoint["y1"]
+        self.__x2: float = checkpoint["x2"]
+        self.__y2: float = checkpoint["y2"]
         self.__crossed = False
         self.__num = p_num
 
@@ -425,16 +541,16 @@ class Checkpoint:
     def get_num(self) -> int:
         return self.__num
 
-    def get_x1(self) -> int:
+    def get_x1(self) -> float:
         return self.__x1
 
-    def get_x2(self) -> int:
+    def get_x2(self) -> float:
         return self.__x2
 
-    def get_y1(self) -> int:
+    def get_y1(self) -> float:
         return self.__y1
 
-    def get_y2(self) -> int:
+    def get_y2(self) -> float:
         return self.__y2
 
 
@@ -459,183 +575,3 @@ class SectorLineCheckpoint(Checkpoint):
             if self.check_line(coordinates):
                 return True
         return False
-
-
-class CheckpointDefiner:
-    # Initialization
-    def __init__(self, p_use_camera_stream: bool = True, video_path: str = "") -> None:
-        """
-        Initializes the class.
-
-        Input:
-
-            Debugging Only (!!DO NOT USE!!):
-            `use_camera_stream:bool = True` -> If set to false it will show the video on the given `video_path`
-            `video_path:str = ""` -> If use_camera_stream is set to false it will try to read this video
-
-        Output:
-        `None`
-        """
-        self.__close = False
-        self.__roi_points: list = []
-        self.__click = 0
-        self.__checkpoints: dict = {"checkpoints": []}
-        self.__use_camera_stream: bool = p_use_camera_stream
-
-        self.__pynng_config = read_config("time_tracking_config.json")
-
-        self.__define_cap(video_path)
-        self.__define_windows()
-
-    def __define_cap(self, video_path: str) -> None:
-        """
-        Defines the video cap.
-
-        Input: `video_path:str` -> if `use_camera_stream=True` then enter the video path else leave it as a blank
-        string (Debugging)
-
-        Output:
-        `None`
-        """
-        if self.__use_camera_stream:
-            self.__define_image_receiver()
-            self.__RESHAPE_VIDEO_SIZE = (480, 640, 3)
-            # self.__RESHAPE_VIDEO_SIZE = (990, 1332, 3)
-            self.__read_new_frame()
-        else:
-            self.__video_cap = cv2.VideoCapture(video_path)
-            success, self.__frame = self.__video_cap.read()
-            if not success:
-                raise FileNotFoundError("Could not read the first frame of the video.")
-
-    def __define_image_receiver(self) -> None:
-        """
-        Defines the image receiver, so it can receive the images from the  time_tracking module.
-
-        Input/Output:
-        `None`
-        """
-        self.__frame_receiver = pynng.Sub0()
-        self.__frame_receiver.subscribe("")
-        self.__frame_receiver.dial(self.__pynng_config["pynng"]["subscribers"]["__sub_coordinates"]["address"])
-
-    def __define_windows(self) -> None:
-        """
-        Defines the Windows to be used by `cv2.imshow()`
-
-        Input/Output:
-        `None`
-        """
-        cv2.namedWindow("Point Drawer")
-
-        cv2.setMouseCallback("Point Drawer", self.__mouse_event_handler)
-
-    # Mouse Handler
-    def __mouse_event_handler(self, event: int, x: int, y: int, _flags, _params) -> None:
-        """
-        A function that handles the mouse events from `cv2.setMouseCallback()`
-
-        Input:
-        `event:int` -> The event that has been fired
-        `x:int` -> The x position of the cursor
-        `y:int` -> The y position of the cursor
-        `_flags` -> Placeholder
-        `_params` -> Placeholder
-
-        Output:
-        `None`
-        """
-
-        if event == cv2.EVENT_LBUTTONDOWN:
-            self.__click += 1
-            if self.__click != 2:
-                self.__helper = (x, y)
-            else:
-                self.__roi_points.append([self.__helper, (x, y)])
-                self.__click = 0
-
-        elif event == cv2.EVENT_RBUTTONDOWN:
-            self.__roi_points.pop()
-        elif event == cv2.EVENT_MBUTTONDOWN:
-            self.__click = 0
-            self.__roi_points = []
-
-    # Helper Functions
-    def __read_new_frame(self) -> None:
-        """
-        Reads the next frame in the video.
-
-        Input/Output:
-        `None`
-        """
-        if self.__use_camera_stream:
-            frame_bytes = self.__frame_receiver.recv()
-            frame = np.frombuffer(frame_bytes, dtype=np.uint8)
-            self.__frame = frame.reshape(self.__RESHAPE_VIDEO_SIZE)
-        else:
-            success, self.__frame = self.__video_cap.read()
-            if not success:
-                raise IndexError("Frame could not be read. Video probably ended.")
-
-    def __draw_on_frame(self) -> None:
-        """
-        Draws the checkpoints on the picture
-
-        Input/Output:
-        `None`
-        """
-        self.__lined_frame = self.__frame.copy()
-        if len(self.__roi_points) >= 1:
-            for line in self.__roi_points:
-                self.__lined_frame = cv2.polylines(self.__lined_frame, [np.array(line)], True, (0, 0, 255), 2)
-            self.__updated_frame = np.zeros_like(self.__frame)
-
-    def __show_images(self) -> None:
-        """
-        Shows the image to the `cv2.namedWindow()` using `cv2.imshow()`.
-
-        Input/Output:
-        `None`
-        """
-        cv2.imshow("Point Drawer", self.__lined_frame)
-
-    def __check_to_close(self) -> None:
-        """
-        Uses `cv2.waitKey()` to check if the user wants to quit the program
-
-        Input/Output:
-        None
-        """
-
-        if cv2.waitKey(1) & 0xFF == ord("q"):
-            cv2.destroyAllWindows()
-            self.__save_config()
-            self.__close = True
-
-    def __save_config(self) -> None:
-        """
-        Saves the coordinates to the `time_tracking.json` file.
-
-        Input/Output:
-        None
-        """
-        for line in self.__roi_points:
-            self.__checkpoints["checkpoints"].append(
-                {"x1": line[0][0], "y1": line[0][1], "x2": line[1][0], "y2": line[1][1]}
-            )
-        with open("time_tracking.json", "w") as f:
-            json.dump(self.__checkpoints, f, indent=4)
-
-    # Main Functions
-    def main(self) -> None:
-        """
-        Is a loop that goes through the Camera Stream. !DEBUGGING ONLY: Uses video instead of camera stream.!
-
-        Input/Output:
-        None
-        """
-        while self.__close is False:
-            self.__read_new_frame()
-            self.__draw_on_frame()
-            self.__show_images()
-            self.__check_to_close()
