@@ -28,7 +28,8 @@ class CheckpointDefiner:
         self.__checkpoints: dict = {"checkpoints": []}
         self.__use_camera_stream: bool = p_use_camera_stream
 
-        self.__pynng_config = read_config("time_tracking_config.json")
+        with open("./time_tracking_config.json", "r") as file:
+            self.__pynng_config = json.load(file)
 
         self.__define_cap(video_path)
         self.__define_windows()

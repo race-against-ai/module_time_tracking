@@ -1,0 +1,2 @@
+include time_tracking/templates/*.json
+include time_tracking/schemas/*.json
