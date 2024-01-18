@@ -32,8 +32,9 @@ class LapTimer:
         self.__user: str | None = "anon"
 
         if not CONFIG_FILE_PATH.exists():
-            with open(CONFIG_FILE_PATH, "w") as config_file, open(FILE_DIR / "templates/time_tracking_config.json",
-                                                                  "r") as template_file:
+            with open(CONFIG_FILE_PATH, "w") as config_file, open(
+                FILE_DIR / "templates/time_tracking_config.json", "r"
+            ) as template_file:
                 dump(load(template_file), config_file, indent=4)
 
         with open("./time_tracking_config.json", "r") as file:
@@ -51,9 +52,7 @@ class LapTimer:
         self.__number_of_checkpoints = len(self.__config["checkpoints"])
         self.__checkpoint_list = self.__config["checkpoints"]
 
-
-
-        self.__pynng_config = (read_config("./time_tracking_config.json"))
+        self.__pynng_config = read_config("./time_tracking_config.json")
 
         self.__define_coordinate_receiver()
         self.__define_frame_receiver()
@@ -324,7 +323,7 @@ class LapTimer:
         """
         msg = self.__sub_coordinates.recv()
         i = msg.find(b" ")
-        data = msg[i + 1:]
+        data = msg[i + 1 :]
         json_data = data.decode("utf-8")
         coordinates = json.loads(json_data)
         return coordinates
@@ -339,7 +338,7 @@ class LapTimer:
             msg = self.__sub_user.recv(block=False)
             msg = msg.decode("utf-8")
             i = msg.find(" ")
-            data = msg[i + 1:]
+            data = msg[i + 1 :]
             return data
         except pynng.TryAgain:
             return None
@@ -516,8 +515,8 @@ class Checkpoint:
         cv2.polylines(img, [pts], True, (0, 0, 255), 3)
 
     def check_line(
-            self,
-            p_points: list,
+        self,
+        p_points: list,
     ) -> bool:
         """
         checks if the car drives through the given Pixels
