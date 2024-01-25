@@ -19,7 +19,7 @@
                         "__sub_frame": {"$ref": "#/$defs/address_without_topic"},
                         "__sub_user": {"$ref": "#/$defs/address_with_topic"}
                     },
-                    "required": ["camera_frame_receiver", "tracker_config"]
+                    "required": ["__sub_frame", "__sub_coordinates", "__pub_time"]
                 },
                 "requesters": {
                     "type": "object",
