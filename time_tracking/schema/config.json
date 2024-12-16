@@ -1,0 +1,59 @@
+{
+    "type": "object",
+    "properties": {
+        "pynng": {
+            "type": "object",
+            "properties": {
+                "publishers": {
+                    "type": "object",
+                    "properties": {
+                        "__pub_time": {"$ref": "#/$defs/address_with_topic"},
+                        "__pub_frame": {"$ref": "#/$defs/address_without_topic"}
+                    }
+                },
+                "subscribers": {
+                    "type": "object",
+                    "properties": {
+                        "__sub_coordinates": {"$ref": "#/$defs/address_with_topic"},
+                        "__sub_coordinates_fallback": {"$ref": "#/$defs/address_without_topic"},
+                        "__sub_frame": {"$ref": "#/$defs/address_without_topic"},
+                        "__sub_user": {"$ref": "#/$defs/address_with_topic"}
+                    },
+                    "required": ["__sub_frame", "__sub_coordinates", "__pub_time"]
+                },
+                "requesters": {
+                    "type": "object",
+                    "properties": {
+                        "best_times": {"$ref": "#/$defs/address_without_topic"}
+                    }
+                }
+            },
+            "required": ["publishers", "subscribers"]
+        }
+    },
+    "required": ["pynng"],
+    "$defs": {
+        "address_without_topic": {
+            "type": "object",
+            "properties": {
+                "address": {"type": "string"},
+                "topics": {
+                    "type": "object",
+                    "properties": {}
+                }
+            },
+            "required": ["address"]
+        },
+        "address_with_topic": {
+            "type": "object",
+            "properties": {
+                "address": {"type": "string"},
+                "topics": {
+                    "type": "object",
+                    "properties": {}
+                }
+            },
+            "required": ["address", "topics"]
+        }
+    }
+}

@@ -9,11 +9,11 @@ def read(fname):
 
 
 setup(
-    name="time_tracking",
+    name="raai_module_time_tracking",
     version=versioneer.get_version(),
     cmdclass=versioneer.get_cmdclass(),
     author="NGITl",
-    author_email="j.kurpeik@gmail.com",
+    author_email="justin.kurpeik@volkswagen.de",
     description=("RAAI Module Template for managing different projects for RAAI"),
     license="GPL 3.0",
     keywords="time tracking",
@@ -21,4 +21,5 @@ setup(
     packages=find_packages(),
     long_description=read("README.md"),
     install_requires=["pynng~=0.7.2"],
+    include_package_data=True,
 )
